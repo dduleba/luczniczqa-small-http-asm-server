@@ -44,10 +44,9 @@ $ docker load -i httpd.tar
 * most size of docker image is used to store the ŁuczniczQA photo:)
 
 ```shell script
-$ ls -l luczniczqa.svg
--rw-r--r-- 1 dduleba dduleba 62160 kwi 29 23:13 luczniczqa.svg
-
+$ du -sh luczniczqa.svg 
+64K     luczniczqa.svg
 $ docker images httpd
-REPOSITORY          TAG                 IMAGE ID            CREATED              SIZE
-httpd               latest              093acfaddbef        About a minute ago   63.4kB
+REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
+httpd               latest              0bb1095c847f        14 seconds ago      63.5kB
 ```
