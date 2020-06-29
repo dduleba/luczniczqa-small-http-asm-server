@@ -56,11 +56,10 @@ Oprogramowanie umożliwiające wirtualizacje na poziomie systemu operacyjnego (k
 ### Tworzenie bazowego obrazu docker'owego
 
 Aby uzyskać jak najmniejszy obraz, musimy ograniczyć jego zawartość:
-* obrazy docker'owe są jak ogry/cebule 
+* obrazy docker'owe są jak ogry/cebule posiadają warstwy
     * nasz kontener jednak chcemy ograniczyć pod tym względem
-* w tym celu tworzymy obraz bazowy
+* w tym celu tworzymy obraz bazowy **from scratch**
     * nie korzystając z istniejących obrazów systemu
-        * same obrazy czystych obrazów znacząco przekraczają oczekiwany rozmiar
     * dostarczamy jedynie plik binarny ze statycznie podlinkowanymi bibliotekami
     
 ![Dockery maja warstwy](data/shrek.jpg)
@@ -74,6 +73,8 @@ Aby uzyskać jak najmniejszy obraz, musimy ograniczyć jego zawartość:
 $ nasm -f elf httpd.asm
 # Linkowanie 
 $ ld -m elf_i386 httpd.o -o httpd
+$ ls -l httpd
+-rwxrwxr-x 1 ddl ddl 63500 cze 29 18:02 httpd
 # Tworzenie Dockerowego obrazu
 $ echo httpd > manifest.txt
 $ tar cv --files-from manifest.txt | docker import - httpd
@@ -83,7 +84,7 @@ $ docker save httpd -o httpd.tar
 $ docker load -i httpd.tar
 ```
 
-Powyższe rozwiązanie ma pewne wady 
+Powyższe rozwiązanie ma pewne wady
 * przygotowanie pliku binarnego bazuje na naszym systemie
 * W moim przypadku szybko się o tym przekonałem - szczęście testera
   * po zmianie systemu z ubuntu 18.04 na ubuntu 20.04 binarka przytyła z 63.5KB do 71KB
@@ -127,7 +128,6 @@ d69fb480443c        20 hours ago        /bin/sh -c #(nop)  ENV TZ=Europe/Warsaw 
 ```
 
 * [multi-stage build](https://docs.docker.com/develop/develop-images/multistage-build/) wraz z wykorzystaniem **from scratch**
-
 
 Budowanie obrazu
 ```shell script
