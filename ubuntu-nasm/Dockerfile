@@ -9,8 +9,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 RUN apt-get update
 RUN apt-get install -y \
        nasm \
-       binutils \
-       xxd
+       binutils
 
 # Run shell if container is started
 CMD ["/bin/bash"]

@@ -15,7 +15,7 @@ Rozwiązanie:
     * Serwer w języku niskiego poziomu 
     * kod źródłowy strony wraz z grafiką częścią kodu
         * nie ma konieczności obsługi plików
-    * Tworzenie bazowego kontera dockerowego
+    * Tworzenie bazowego obrazu docker'owego
         
 ## Przygotowanie serwera www
 
@@ -23,14 +23,13 @@ W celu uzyskania jak najmniejszego serwera musiałem cofnąć się kilka lat wst
 
 * odświeżyć już zapomniane narzędzia (w moim przypadku z czasów technikum elektronicznego)
 * **assembler** 
-    * język niskiego poziomu który nie ma narzutu pod kątem wielkości
-    * wiąże się to jednak z pewnymi trudnościami ale czego się nie robi dla **ŁuczniczQA**:)
- 
-
+    * język niskiego poziomu
+        * daje możliwość optymalizacji pod kątem rozmiaru wynikowego programu
+    * wiąże się to jednak z pewnymi trudnościami, ale czego się nie robi dla **ŁuczniczQA**:)
 
 ![Serwer w asemblerze](data/czlowiek-z-kamienia.jpg)
 
-Fragment kodu - tutaj nawet ja pokusiłem się o pozostawienie komentarzy
+Fragment kodu
 ```
 SECTION .data
 ; our response string
@@ -46,18 +45,29 @@ _write:
 ..
 ```
 
-## Tworzenie bazowego image'a
+Zbudowana aplikacja zajmuje 63.5K, dla porównania sam interpreter pythona zajmuje 5.3M
 
-Aby uzyskać jak najmniejszy obraz musimy ograniczyć jego zawartość
-* w tym celu tworzymy obraz bazowy (nie korzystając z istniejących obrazów)
-    * wymaga pliku binarnego ze statycznie podlinkowanymi bibliotekami
-    * w przeciwieństwie do ogrów nasz obraz nie powinien posiadać wielu zbędnych warstw:)
+## Docker
+![Docker](data/docker.png)
 
+Oprogramowanie umożliwiające wirtualizacje na poziomie systemu operacyjnego (konteneryzacja)
+* narzędzie, które pozwala umieścić program oraz jego zależności w lekkim przenośnym kontenerze 
+
+### Tworzenie bazowego obrazu docker'owego
+
+Aby uzyskać jak najmniejszy obraz, musimy ograniczyć jego zawartość:
+* obrazy docker'owe są jak ogry/cebule 
+    * nasz kontener jednak chcemy ograniczyć pod tym względem
+* w tym celu tworzymy obraz bazowy
+    * nie korzystając z istniejących obrazów systemu
+        * same obrazy czystych obrazów znacząco przekraczają oczekiwany rozmiar
+    * dostarczamy jedynie plik binarny ze statycznie podlinkowanymi bibliotekami
+    
 ![Dockery maja warstwy](data/shrek.jpg)
         
 [Docker tworzenie bazowego kontenera](https://docs.docker.com/develop/develop-images/baseimages/)
 
-* Tworzenie image'a korzystając z tar'a
+* Tworzenie image'a za pomocą tar'a
 
 ```shell script
 # Kompilacja
@@ -73,18 +83,16 @@ $ docker save httpd -o httpd.tar
 $ docker load -i httpd.tar
 ```
 
-Powyższe rozwiązanie ma pewne wady - przygotowanie binarki bazuje na systemie hosta
-* W moim przypadku szybko się o tym przekonałem - szczęście testera :)
-* Po zmianie systemu z ubuntu 18.04 na ubuntu 20.04 binarka przytyła z 63.5KB do 71KB
+Powyższe rozwiązanie ma pewne wady 
+* przygotowanie pliku binarnego bazuje na naszym systemie
+* W moim przypadku szybko się o tym przekonałem - szczęście testera
+  * po zmianie systemu z ubuntu 18.04 na ubuntu 20.04 binarka przytyła z 63.5KB do 71KB
   * problem udało się rozwiązać przez dodatkowe opcje przy linkowaniu "**-z noseparate-code**"
   * aby jednak ustrzedz się podobnych problemów należało zoptymalizować samo budowanie i linkowanie 
 
-## Optymalizacja
-
-* [multi-stage build](https://docs.docker.com/develop/develop-images/multistage-build/) wraz z wykorzystaniem **from scratch**
+## Dockerfile
  
-Zatem nałatwiej do tego skorzystać z kolejnego docker'owego obrazu
-
+Dockerfile z narzędziami do kompilacji, linkowania aplikacji
 ```dockerfile
 FROM ubuntu:18.04
 
@@ -94,21 +102,41 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 RUN apt-get update
 RUN apt-get install -y \
        nasm \
-       binutils \
-       xxd
-
+       binutils
 # Run shell if container is started
 CMD ["/bin/bash"]
 ```
 
-Budowanie kontenera
+```shell script
+$ docker images luczniczqa/nasm:ubuntu-18.04
+REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
+luczniczqa/nasm     ubuntu-18.04        98095e595ad1        12 minutes ago      112MB
+$ docker image history luczniczqa/nasm:ubuntu-18.04
+IMAGE               CREATED             CREATED BY                                      SIZE                COMMENT
+98095e595ad1        12 minutes ago      /bin/sh -c #(nop)  CMD ["/bin/bash"]            0B                  
+3e5ea4b6c2b1        12 minutes ago      /bin/sh -c apt-get install -y        nasm   …   18.6MB              
+6a6671e66f4a        20 hours ago        /bin/sh -c apt-get update                       28.8MB              
+b8a3ac7be637        20 hours ago        /bin/sh -c ln -snf /usr/share/zoneinfo/$TZ /…   47B                 
+d69fb480443c        20 hours ago        /bin/sh -c #(nop)  ENV TZ=Europe/Warsaw         0B                  
+90555d86f464        20 hours ago        /bin/sh -c #(nop)  LABEL author=Dariusz Duel…   0B                  
+8e4ce0a6ce69        12 days ago         /bin/sh -c #(nop)  CMD ["/bin/bash"]            0B                  
+<missing>           12 days ago         /bin/sh -c mkdir -p /run/systemd && echo 'do…   7B                  
+<missing>           12 days ago         /bin/sh -c set -xe   && echo '#!/bin/sh' > /…   745B                
+<missing>           12 days ago         /bin/sh -c [ -z "$(apt-get indextargets)" ]     987kB               
+<missing>           12 days ago         /bin/sh -c #(nop) ADD file:1e8d02626176dc814…   63.2MB     
+```
+
+* [multi-stage build](https://docs.docker.com/develop/develop-images/multistage-build/) wraz z wykorzystaniem **from scratch**
+
+
+Budowanie obrazu
 ```shell script
 docker build ubuntu-nasm -t luczniczqa/nasm:ubuntu-18.04
 ```
 
 Finalny Dockerfile 
-* z **FROM luczniczqa/nasm:ubuntu-18.04 AS build** warstwą do budowania
-* oraz **FROM scratch** w celu utworzenia bazowego obrazu
+* etap budowania **FROM luczniczqa/nasm:ubuntu-18.04 AS build**
+* etap tworzenia finalnego obrazu **FROM scratch**
 ```dockerfile
 # Use a multi-stage build
 FROM luczniczqa/nasm:ubuntu-18.04 AS build
@@ -125,59 +153,26 @@ COPY --from=build /src/httpd /
 CMD ["/httpd"]
 ```
 
-Tworzenie kontenera z serwerem http
 ```shell script
-docker build . -t luczniczqa/httpd:ubuntu-18.04 -t luczniczqa/httpd:latest
+# Tworzenie kontenera z serwerem http
+$ docker build . -t luczniczqa/httpd:ubuntu-18.04 -t luczniczqa/httpd:latest
+# Weryfikacja wielkości obrazu
+$ docker images luczniczqa/httpd:ubuntu-18.04
+REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
+luczniczqa/httpd    ubuntu-18.04        7ca0af82cbe5        20 hours ago        63.5kB
+# Weryfikacja warstw
+$ docker image history luczniczqa/httpd:ubuntu-18.04
+IMAGE               CREATED             CREATED BY                                      SIZE                COMMENT
+7ca0af82cbe5        20 hours ago        /bin/sh -c #(nop)  CMD ["/httpd"]               0B                  
+fb01c7655ae1        20 hours ago        /bin/sh -c #(nop) COPY file:8462b2ff0924347f…   63.5kB 
 ```
-
-Weryfikacja wielkości obrazu:
-```shell script
-# obraz do buodwania binarki
-$ $ docker image history luczniczqa/nasm:ubuntu-18.04
-  IMAGE               CREATED             CREATED BY                                      SIZE                COMMENT
-  c666b2a72495        18 hours ago        /bin/sh -c #(nop)  CMD ["/bin/bash"]            0B                  
-  4c95c6c1ec3b        18 hours ago        /bin/sh -c apt-get install -y        nasm   …   18.6MB              
-  6a6671e66f4a        18 hours ago        /bin/sh -c apt-get update                       28.8MB              
-  b8a3ac7be637        18 hours ago        /bin/sh -c ln -snf /usr/share/zoneinfo/$TZ /…   47B                 
-  d69fb480443c        18 hours ago        /bin/sh -c #(nop)  ENV TZ=Europe/Warsaw         0B                  
-  90555d86f464        18 hours ago        /bin/sh -c #(nop)  LABEL author=Dariusz Duel…   0B                  
-  8e4ce0a6ce69        12 days ago         /bin/sh -c #(nop)  CMD ["/bin/bash"]            0B                  
-  <missing>           12 days ago         /bin/sh -c mkdir -p /run/systemd && echo 'do…   7B                  
-  <missing>           12 days ago         /bin/sh -c set -xe   && echo '#!/bin/sh' > /…   745B                
-  <missing>           12 days ago         /bin/sh -c [ -z "$(apt-get indextargets)" ]     987kB               
-  <missing>           12 days ago         /bin/sh -c #(nop) ADD file:1e8d02626176dc814…   63.2MB  
-
-# docelowy obraz z binarką
-$ docker image history luczniczqa/httpd
-  IMAGE               CREATED             CREATED BY                                      SIZE                COMMENT
-  7ca0af82cbe5        18 hours ago        /bin/sh -c #(nop)  CMD ["/httpd"]               0B                  
-  fb01c7655ae1        18 hours ago        /bin/sh -c #(nop) COPY file:8462b2ff0924347f…   63.5kB
-```
-
 ### docker run example
 
 ```shell script
 $ docker run -d --name httpd -p 9001:9001 luczniczqa/httpd ./httpd
 ```
 
-### Rozmiar ~~nie~~ jest najważniejszy
-
-* most size of docker image is used to store the ŁuczniczQA photo:)
-
-```shell script
-$ ls -l data/luczniczqa.svg 
--rw-rw-r-- 1 ddl ddl 62160 cze  6 06:14 data/luczniczqa.svg
-$ docker images
-REPOSITORY          TAG                 IMAGE ID            CREATED              SIZE
-luczniczqa/httpd    ubuntu-18.04        7ca0af82cbe5        50 seconds ago       63.5kB
-luczniczqa/nasm     ubuntu-18.04        c666b2a72495        About a minute ago   112MB
-ubuntu              18.04               8e4ce0a6ce69        11 days ago          64.2MB
-```
-
-## QA
-
-# Dołącz do nas
-
+# QA Automation Engineer
 [![Dołącz do nas QA Automation Engineer](https://slack-imgs.com/?c=1&o1=ro&url=https%3A%2F%2Fhuuugegames.com%2Fassets%2Fthemes%2Fhuuuge%2Fpublic_html%2Fimg%2Fjoin-us-social.png)](https://huuugegames.com/careers/offer/?id=1779)
 
 
